@@ -90,3 +90,7 @@ jobs:
           name: vps-backup
           path: backup.zip
           retention-days: 90
+
+# Useful references:
+# https://github.com/How2MCoffc/Get-SSL-at-localhost
+# https://pterodactyl.io/
