@@ -92,9 +92,8 @@ jobs:
           path: backup.zip
 
 
-TAILSCALE_AUTHKEY
+      TAILSCALE_AUTHKEY
 
-your key inside it 
 
 https://github.com/How2MCoffc/Get-SSL-at-localhost
 
