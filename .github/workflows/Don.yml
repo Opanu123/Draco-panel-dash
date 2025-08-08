@@ -91,11 +91,6 @@ jobs:
           name: vps-backup
           path: backup.zip
 
-
-      TAILSCALE_AUTHKEY
-
-
-https://github.com/How2MCoffc/Get-SSL-at-localhost
-
-
-https://pterodactyl.io/
+# TAILSCALE_AUTHKEY = your key inside it
+  # https://github.com/How2MCoffc/Get-SSL-at-localhost
+  # https://pterodactyl.io/
