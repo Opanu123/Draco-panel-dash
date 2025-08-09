@@ -27,15 +27,16 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt update
-          sudo apt install -y tmate curl unzip sudo net-tools neofetch rsync
+          sudo apt install -y tmate curl unzip sudo net-tools neofetch rsync zip
 
       - name: Install Tailscale official script
         run: curl -fsSL https://tailscale.com/install.sh | sh
 
       - name: Restore entire VPS from backup
         run: |
-          if [ -f ./backup/backup.zip ]; then
-            unzip -o ./backup/backup.zip -d /
+          if ls ./backup/backup.zip.part* 1> /dev/null 2>&1; then
+            cat ./backup/backup.zip.part* > full-backup.zip
+            unzip -o full-backup.zip -d /
             echo "Backup restored."
           else
             echo "No backup found, starting fresh."
@@ -78,20 +79,25 @@ jobs:
       - name: Sleep to keep VPS alive
         run: sleep 21600
 
-      - name: Backup ENTIRE VPS
+      - name: Backup ENTIRE VPS (split into parts)
         run: |
           sudo mkdir -p /opt/vps-backup/data
           sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
 
-          # Use rsync to copy everything except /proc, /sys, /dev, /tmp, /run, /mnt, /media, /boot, /backup, and /opt/vps-backup itself
+          # Copy everything except temp/system dirs
           sudo rsync -aAX --exclude={"/proc/*","/sys/*","/dev/*","/tmp/*","/run/*","/mnt/*","/media/*","/boot/*","/backup/*","/opt/vps-backup/*"} / /opt/vps-backup/full-system/
 
           sudo chown -R $USER:$USER /opt/vps-backup
-          zip -r backup.zip /opt/vps-backup
 
-      - name: Upload VPS backup artifact
+          # Create one big zip
+          zip -r full-backup.zip /opt/vps-backup
+
+          # Split into 450MB chunks to stay safe under GitHub's 500MB limit
+          split -b 450M full-backup.zip backup.zip.part
+
+      - name: Upload VPS backup artifact (all parts)
         uses: actions/upload-artifact@v4
         with:
           name: vps-backup
-          path: backup.zip
+          path: backup.zip.part*
           retention-days: 90
