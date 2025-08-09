@@ -27,17 +27,18 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt update
-          sudo apt install -y tmate curl unzip sudo net-tools neofetch
+          sudo apt install -y tmate curl unzip sudo net-tools neofetch rsync
 
       - name: Install Tailscale official script
         run: curl -fsSL https://tailscale.com/install.sh | sh
 
-      - name: Restore backup files
+      - name: Restore entire VPS from backup
         run: |
           if [ -f ./backup/backup.zip ]; then
             unzip -o ./backup/backup.zip -d /
+            echo "Backup restored."
           else
-            echo "No backup found, starting fresh"
+            echo "No backup found, starting fresh."
           fi
 
       - name: Restore Tailscale state
@@ -77,10 +78,14 @@ jobs:
       - name: Sleep to keep VPS alive
         run: sleep 21600
 
-      - name: Backup VPS data and tailscale state
+      - name: Backup ENTIRE VPS
         run: |
           sudo mkdir -p /opt/vps-backup/data
-          sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/
+          sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
+
+          # Use rsync to copy everything except /proc, /sys, /dev, /tmp, /run, /mnt, /media, /boot, /backup, and /opt/vps-backup itself
+          sudo rsync -aAX --exclude={"/proc/*","/sys/*","/dev/*","/tmp/*","/run/*","/mnt/*","/media/*","/boot/*","/backup/*","/opt/vps-backup/*"} / /opt/vps-backup/full-system/
+
           sudo chown -R $USER:$USER /opt/vps-backup
           zip -r backup.zip /opt/vps-backup
 
@@ -90,7 +95,3 @@ jobs:
           name: vps-backup
           path: backup.zip
           retention-days: 90
-
-# Useful references:
-# https://github.com/How2MCoffc/Get-SSL-at-localhost
-# https://pterodactyl.io/
