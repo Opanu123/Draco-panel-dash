@@ -19,11 +19,11 @@ jobs:
           sudo apt update
           sudo apt install -y curl unzip sudo net-tools neofetch rsync zip
 
-      - name: Install AWS CLI
+      - name: Install or update AWS CLI
         run: |
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
           unzip awscliv2.zip
-          sudo ./aws/install
+          sudo ./aws/install --update
 
       - name: Configure AWS CLI for Filebase
         run: |
@@ -79,17 +79,21 @@ jobs:
           echo "Tailscale IPv4:"
           tailscale ip -4 || echo "Tailscale IP not found"
 
-      - name: Backup ENTIRE VPS (lightweight example)
+      - name: Start auto backup loop in background
         run: |
-          sudo mkdir -p /opt/vps-backup/data
-          sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
-          sudo rsync -aAX /home /etc /var/lib /opt/vps-backup/full-system/
-          sudo chown -R $USER:$USER /opt/vps-backup
-          zip -r full-backup.zip /opt/vps-backup
-
-      - name: Upload backup to Filebase
-        run: |
-          aws s3 cp full-backup.zip s3://${{ secrets.FILEBASE_BUCKET }}/full-backup.zip
+          nohup bash -c '
+          while true; do
+            echo "Starting backup at $(date)"
+            sudo mkdir -p /opt/vps-backup/data
+            sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
+            sudo rsync -aAX /home /etc /var/lib /opt/vps-backup/full-system/
+            sudo chown -R $USER:$USER /opt/vps-backup
+            zip -r full-backup.zip /opt/vps-backup
+            aws s3 cp full-backup.zip s3://${{ secrets.FILEBASE_BUCKET }}/full-backup.zip
+            echo "Backup completed at $(date)"
+            sleep 1800
+          done
+          ' > backup.log 2>&1 &
 
       - name: Sleep to keep VPS alive
         run: sleep 21600
