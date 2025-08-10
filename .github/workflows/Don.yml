@@ -70,9 +70,6 @@ jobs:
           echo "Tailscale IPv4:"
           tailscale ip -4 || echo "Tailscale IP not found"
 
-      - name: Sleep to keep VPS alive
-        run: sleep 21600
-
       - name: Backup ENTIRE VPS (split into parts)
         run: |
           sudo mkdir -p /opt/vps-backup/data
@@ -90,3 +87,6 @@ jobs:
           name: vps-backup
           path: backup.zip.part*
           retention-days: 90
+
+      - name: Sleep to keep VPS alive
+        run: sleep 21600
