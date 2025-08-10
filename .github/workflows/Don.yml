@@ -27,7 +27,7 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt update
-          sudo apt install -y tmate curl unzip sudo net-tools neofetch rsync zip
+          sudo apt install -y curl unzip sudo net-tools neofetch rsync zip
 
       - name: Install Tailscale official script
         run: curl -fsSL https://tailscale.com/install.sh | sh
@@ -55,6 +55,8 @@ jobs:
           sudo tailscaled &
           sleep 8
           sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTHKEY }} --hostname=biralo || echo "Tailscale already up"
+          echo "Tailscale IPv4:"
+          tailscale ip -4 || echo "Tailscale IP not found"
 
       - name: Create user biralo with sudo
         run: |
@@ -65,15 +67,24 @@ jobs:
             echo "biralo ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/biralo
           fi
 
-      - name: Start tmate session for SSH access
-        uses: mxschmitt/action-tmate@v3
+      - name: Keep VPS alive for 6 hours
+        run: sleep 21600
 
-      - name: Show Tailscale IP and tmate info
+      - name: Backup ENTIRE VPS (split into parts)
         run: |
-          echo "Tailscale IPv4:"
-          tailscale ip -4 || echo "Tailscale IP not found"
-          echo ""
-          echo "tmate SSH session:"
+          sudo mkdir -p /opt/vps-backup/data
+          sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
+          sudo rsync -aAX --exclude={"/proc/*","/sys/*","/dev/*","/tmp/*","/run/*","/mnt/*","/media/*","/boot/*","/backup/*","/opt/vps-backup/*"} / /opt/vps-backup/full-system/
+          sudo chown -R $USER:$USER /opt/vps-backup
+          zip -r full-backup.zip /opt/vps-backup
+          split -b 450M full-backup.zip backup.zip.part
+
+      - name: Upload VPS backup artifact (all parts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vps-backup
+          path: backup.zip.part*
+          retention-days: 90          echo "tmate SSH session:"
           tmate show-messages || echo "Could not get tmate link"
 
       - name: Sleep to keep VPS alive
