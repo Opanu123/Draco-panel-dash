@@ -54,9 +54,7 @@ jobs:
         run: |
           sudo tailscaled &
           sleep 8
-          sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTHKEY }} --hostname=biralo || echo "Tailscale already up"
-          echo "Tailscale IPv4:"
-          tailscale ip -4 || echo "Tailscale IP not found"
+          sudo tailscale up --authkey "${{ secrets.TAILSCALE_AUTHKEY }}" --hostname=biralo || echo "Tailscale already up"
 
       - name: Create user biralo with sudo
         run: |
@@ -67,25 +65,10 @@ jobs:
             echo "biralo ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/biralo
           fi
 
-      - name: Keep VPS alive for 6 hours
-        run: sleep 21600
-
-      - name: Backup ENTIRE VPS (split into parts)
+      - name: Show Tailscale IP
         run: |
-          sudo mkdir -p /opt/vps-backup/data
-          sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
-          sudo rsync -aAX --exclude={"/proc/*","/sys/*","/dev/*","/tmp/*","/run/*","/mnt/*","/media/*","/boot/*","/backup/*","/opt/vps-backup/*"} / /opt/vps-backup/full-system/
-          sudo chown -R $USER:$USER /opt/vps-backup
-          zip -r full-backup.zip /opt/vps-backup
-          split -b 450M full-backup.zip backup.zip.part
-
-      - name: Upload VPS backup artifact (all parts)
-        uses: actions/upload-artifact@v4
-        with:
-          name: vps-backup
-          path: backup.zip.part*
-          retention-days: 90          echo "tmate SSH session:"
-          tmate show-messages || echo "Could not get tmate link"
+          echo "Tailscale IPv4:"
+          tailscale ip -4 || echo "Tailscale IP not found"
 
       - name: Sleep to keep VPS alive
         run: sleep 21600
@@ -94,16 +77,11 @@ jobs:
         run: |
           sudo mkdir -p /opt/vps-backup/data
           sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
-
-          # Copy everything except temp/system dirs
-          sudo rsync -aAX --exclude={"/proc/*","/sys/*","/dev/*","/tmp/*","/run/*","/mnt/*","/media/*","/boot/*","/backup/*","/opt/vps-backup/*"} / /opt/vps-backup/full-system/
-
+          sudo rsync -aAX \
+            --exclude={"/proc/*","/sys/*","/dev/*","/tmp/*","/run/*","/mnt/*","/media/*","/boot/*","/backup/*","/opt/vps-backup/*"} \
+            / /opt/vps-backup/full-system/
           sudo chown -R $USER:$USER /opt/vps-backup
-
-          # Create one big zip
           zip -r full-backup.zip /opt/vps-backup
-
-          # Split into 450MB chunks to stay safe under GitHub's 500MB limit
           split -b 450M full-backup.zip backup.zip.part
 
       - name: Upload VPS backup artifact (all parts)
