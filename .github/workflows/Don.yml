@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y tmate mariadb-server mysql-client php php-cli php-mbstring php-xml php-bcmath php-curl php-mysql redis-server git unzip curl zip
+        sudo apt install -y tmate mariadb-server default-mysql-client php php-cli php-mbstring php-xml php-bcmath php-curl php-mysql redis-server git unzip curl zip
         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
         unzip awscliv2.zip
         sudo ./aws/install
