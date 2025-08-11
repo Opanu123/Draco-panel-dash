@@ -22,9 +22,10 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y tmate awscli mariadb-server mysql-client php php-cli php-mbstring php-xml php-bcmath php-curl php-mysql redis-server git unzip curl zip
-        sudo systemctl start mariadb redis
-        curl -fsSL https://tailscale.com/install.sh | sh
+        sudo apt install -y tmate mariadb-server mysql-client php php-cli php-mbstring php-xml php-bcmath php-curl php-mysql redis-server git unzip curl zip
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
 
     - name: Authenticate and start Tailscale with fixed hostname
       env:
