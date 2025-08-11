@@ -1,99 +1,53 @@
-name: Continuous Persistent VPS with Filebase Backup
+name: Pterodactyl + Tailscale + Auto Backup + SSH
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"  # every 6 hours
 
 jobs:
-  vps-session:
+  ptero:
     runs-on: ubuntu-latest
     timeout-minutes: 350
 
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
+      FILEBASE_BUCKET: ${{ secrets.FILEBASE_BUCKET }}
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - name: Install prerequisites
-        run: |
-          sudo apt update
-          sudo apt install -y curl unzip sudo net-tools neofetch rsync zip
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y tmate awscli mariadb-server mysql-client php php-cli php-mbstring php-xml php-bcmath php-curl php-mysql redis-server git unzip curl zip
+        sudo systemctl start mariadb redis
+        curl -fsSL https://tailscale.com/install.sh | sh
 
-      - name: Install or update AWS CLI
-        run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install --update
+    - name: Authenticate and start Tailscale with fixed hostname
+      env:
+        TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+      run: |
+        sudo tailscale up --authkey $TAILSCALE_AUTH_KEY --hostname pterodactyl-runner
 
-      - name: Configure AWS CLI for Filebase
-        run: |
-          aws configure set aws_access_key_id ${{ secrets.FILEBASE_ACCESS_KEY }}
-          aws configure set aws_secret_access_key ${{ secrets.FILEBASE_SECRET_KEY }}
-          aws configure set default.region us-east-1
-          aws configure set default.s3.endpoint_url https://${{ secrets.FILEBASE_ENDPOINT }}
+    - name: Restore Backup from Filebase
+      run: |
+        mkdir -p midair-panel
+        aws --endpoint-url=https://s3.filebase.com s3 cp s3://$FILEBASE_BUCKET/pterodactyl-backup.tar.gz pterodactyl-backup.tar.gz || exit 0
+        tar -xzf pterodactyl-backup.tar.gz -C /home/runner/
+        if [ -f /home/runner/db_backup.sql ]; then
+          mysql -u root < /home/runner/db_backup.sql
+        fi
 
-      - name: Download backup from Filebase (if any)
-        run: |
-          aws s3 cp s3://${{ secrets.FILEBASE_BUCKET }}/full-backup.zip ./ || echo "No backup found"
+    - name: Auto start Pterodactyl panel
+      run: |
+        cd /home/runner/midair-panel
+        php artisan migrate --force
+        php artisan config:cache
+        nohup php artisan serve --host=0.0.0.0 --port=8080 > panel.log 2>&1 &
 
-      - name: Restore backup if downloaded
-        run: |
-          if [ -f full-backup.zip ]; then
-            unzip -o full-backup.zip -d /
-            echo "Backup restored."
-          else
-            echo "No backup to restore."
-          fi
-
-      - name: Set hostname to biralo
-        run: sudo hostnamectl set-hostname biralo
-
-      - name: Install Tailscale official script
-        run: curl -fsSL https://tailscale.com/install.sh | sh
-
-      - name: Restore Tailscale state
-        run: |
-          if [ -f /opt/vps-backup/data/tailscaled.state ]; then
-            sudo mkdir -p /var/lib/tailscale
-            sudo cp /opt/vps-backup/data/tailscaled.state /var/lib/tailscale/tailscaled.state
-            sudo chmod 600 /var/lib/tailscale/tailscaled.state
-          fi
-
-      - name: Start Tailscale
-        run: |
-          sudo tailscaled &
-          sleep 8
-          sudo tailscale up --authkey "${{ secrets.TAILSCALE_AUTHKEY }}" --hostname=biralo || echo "Tailscale already up"
-
-      - name: Create user biralo with sudo
-        run: |
-          if ! id -u biralo >/dev/null 2>&1; then
-            sudo useradd -m -s /bin/bash biralo
-            echo "biralo:biralo" | sudo chpasswd
-            sudo usermod -aG sudo biralo
-            echo "biralo ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/biralo
-          fi
-
-      - name: Show Tailscale IP
-        run: |
-          echo "Tailscale IPv4:"
-          tailscale ip -4 || echo "Tailscale IP not found"
-
-      - name: Start auto backup loop in background
-        run: |
-          nohup bash -c '
-          while true; do
-            echo "Starting backup at $(date)"
-            sudo mkdir -p /opt/vps-backup/data
-            sudo cp /var/lib/tailscale/tailscaled.state /opt/vps-backup/data/ || true
-            sudo rsync -aAX /home /etc /var/lib /opt/vps-backup/full-system/
-            sudo chown -R $USER:$USER /opt/vps-backup
-            zip -r full-backup.zip /opt/vps-backup
-            aws s3 cp full-backup.zip s3://${{ secrets.FILEBASE_BUCKET }}/full-backup.zip
-            echo "Backup completed at $(date)"
-            sleep 1800
-          done
-          ' > backup.log 2>&1 &
-
-      - name: Sleep to keep VPS alive
-        run: sleep 21600
+    - name: Start SSH Auto-Rotation + Backup Loop
+      run: |
+        bash .github/scripts/ssh_backup_loop.sh
