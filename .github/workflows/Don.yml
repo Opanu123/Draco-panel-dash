@@ -1,54 +1,22 @@
-name: Pterodactyl + Tailscale + Auto Backup + SSH
+name: TOOLBOXLAP
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"  # every 6 hours
 
 jobs:
-  ptero:
-    runs-on: ubuntu-latest
-    timeout-minutes: 350
-
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
-      FILEBASE_BUCKET: ${{ secrets.FILEBASE_BUCKET }}
-
+  build:
+    name: Start Building...
+    runs-on: windows-latest
+    timeout-minutes: 360
+    
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - name: Downloading & Installing Essentials
+        run: |
+          Invoke-WebRequest -Uri "https://gitlab.com/raposabrty/pcrdp/-/raw/main/Downloads.bat" -OutFile "Downloads.bat"
+          cmd /c Downloads.bat
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y tmate mariadb-server default-mysql-client php php-cli php-mbstring php-xml php-bcmath php-curl php-mysql redis-server git unzip curl zip
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-        unzip awscliv2.zip
-        sudo ./aws/install
+      - name: Show Website
+        run: cmd /c show.bat
 
-    - name: Authenticate and start Tailscale with fixed hostname
-      env:
-        TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
-      run: |
-        sudo tailscale up --authkey $TAILSCALE_AUTH_KEY --hostname pterodactyl-runner
-
-    - name: Restore Backup from Filebase
-      run: |
-        mkdir -p midair-panel
-        aws --endpoint-url=https://s3.filebase.com s3 cp s3://$FILEBASE_BUCKET/pterodactyl-backup.tar.gz pterodactyl-backup.tar.gz || exit 0
-        tar -xzf pterodactyl-backup.tar.gz -C /home/runner/
-        if [ -f /home/runner/db_backup.sql ]; then
-          mysql -u root < /home/runner/db_backup.sql
-        fi
-
-    - name: Auto start Pterodactyl panel
-      run: |
-        cd /home/runner/midair-panel
-        php artisan migrate --force
-        php artisan config:cache
-        nohup php artisan serve --host=0.0.0.0 --port=8080 > panel.log 2>&1 &
-
-    - name: Start SSH Auto-Rotation + Backup Loop
-      run: |
-        bash .github/scripts/ssh_backup_loop.sh
+      - name: Time Counter
+        run: cmd /c loop.bat
